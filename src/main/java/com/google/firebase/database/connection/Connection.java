@@ -17,6 +17,7 @@
 package com.google.firebase.database.connection;
 
 import com.google.firebase.database.logging.LogWrapper;
+import org.json.JSONObject;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -93,7 +94,7 @@ class Connection implements WebsocketConnection.Delegate {
     request.put(REQUEST_TYPE, REQUEST_TYPE_DATA);
     request.put(REQUEST_PAYLOAD, message);
 
-    sendData(request, isSensitive);
+    sendData(request, false);
   }
 
   @Override
@@ -240,7 +241,8 @@ class Connection implements WebsocketConnection.Delegate {
       if (isSensitive) {
         logger.debug("Sending data (contents hidden)");
       } else {
-        logger.debug("Sending data: %s", data);
+        JSONObject json = new JSONObject(data);
+        logger.debug("Sending data: %s", json.toString());
       }
       conn.send(data);
     }
