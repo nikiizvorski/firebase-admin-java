@@ -45,7 +45,6 @@ import com.google.firebase.database.snapshot.IndexedNode;
 import com.google.firebase.database.snapshot.Node;
 import com.google.firebase.database.snapshot.NodeUtilities;
 import com.google.firebase.database.snapshot.RangeMerge;
-import com.google.firebase.database.tyrus.TyrusPersistentConnection;
 import com.google.firebase.database.utilities.DefaultClock;
 import com.google.firebase.database.utilities.OffsetClock;
 
@@ -100,8 +99,7 @@ public class Repo implements PersistentConnection.Delegate {
     this.eventRaiser = new EventRaiser(this.ctx);
 
     HostInfo hostInfo = new HostInfo(repoInfo.host, repoInfo.namespace, repoInfo.secure);
-    //connection = ctx.newPersistentConnection(hostInfo, this);
-    connection = new TyrusPersistentConnection(this, hostInfo, ctx.authTokenProvider);
+    connection = ctx.newPersistentConnection(hostInfo, this);
 
     // Kick off any expensive additional initialization
     scheduleNow(
@@ -144,7 +142,7 @@ public class Repo implements PersistentConnection.Delegate {
 
     // Open connection now so that by the time we are connected the deferred init has run
     // This relies on the fact that all callbacks run on repo's runloop.
-    // connection.initialize();
+    connection.initialize();
 
     PersistenceManager persistenceManager = ctx.getPersistenceManager(repoInfo.host);
 
@@ -215,10 +213,6 @@ public class Repo implements PersistentConnection.Delegate {
 
     updateInfo(Constants.DOT_INFO_AUTHENTICATED, false);
     updateInfo(Constants.DOT_INFO_CONNECTED, false);
-
-    // Open connection now so that by the time we are connected the deferred init has run
-    // This relies on the fact that all callbacks run on repo's runloop.
-    connection.initialize();
   }
 
   private void restoreWrites(PersistenceManager persistenceManager) {

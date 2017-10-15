@@ -17,7 +17,6 @@
 package com.google.firebase.database.core;
 
 import com.google.firebase.FirebaseApp;
-import com.google.firebase.ImplFirebaseTrampolines;
 import com.google.firebase.database.DatabaseException;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.connection.ConnectionAuthTokenProvider;
@@ -28,7 +27,6 @@ import com.google.firebase.database.core.persistence.NoopPersistenceManager;
 import com.google.firebase.database.core.persistence.PersistenceManager;
 import com.google.firebase.database.logging.LogWrapper;
 import com.google.firebase.database.logging.Logger;
-import com.google.firebase.database.tubesock.ThreadConfig;
 import com.google.firebase.database.utilities.DefaultRunLoop;
 
 import java.util.List;
@@ -39,17 +37,18 @@ public class Context {
   private static final long DEFAULT_CACHE_SIZE = 10 * 1024 * 1024;
 
   protected Logger logger;
-  protected EventTarget eventTarget;
-  protected AuthTokenProvider authTokenProvider;
-  protected RunLoop runLoop;
-  protected String persistenceKey;
-  protected List<String> loggedComponents;
-  protected String userAgent;
-  protected Logger.Level logLevel = Logger.Level.INFO;
-  protected boolean persistenceEnabled;
-  protected long cacheSize = DEFAULT_CACHE_SIZE;
-  protected FirebaseApp firebaseApp;
-  private PersistenceManager forcedPersistenceManager;
+
+  EventTarget eventTarget;
+  AuthTokenProvider authTokenProvider;
+  RunLoop runLoop;
+  String persistenceKey;
+  List<String> loggedComponents;
+  Logger.Level logLevel = Logger.Level.INFO;
+  boolean persistenceEnabled;
+  long cacheSize = DEFAULT_CACHE_SIZE;
+  FirebaseApp firebaseApp;
+
+  private String userAgent;
   private boolean frozen = false;
   private boolean stopped = false;
 
@@ -88,10 +87,6 @@ public class Context {
     return platform;
   }
 
-  public boolean isFrozen() {
-    return frozen;
-  }
-
   public boolean isStopped() {
     return stopped;
   }
@@ -103,7 +98,7 @@ public class Context {
     }
   }
 
-  public void requireStarted() {
+  void requireStarted() {
     if (stopped) {
       restartServices();
       stopped = false;
@@ -134,8 +129,8 @@ public class Context {
     runLoop.shutdown();
   }
 
-  protected void assertUnfrozen() {
-    if (isFrozen()) {
+  void assertUnfrozen() {
+    if (frozen) {
       throw new DatabaseException(
           "Modifications to DatabaseConfig objects must occur before they are in use");
     }
@@ -153,27 +148,17 @@ public class Context {
     return new LogWrapper(logger, component, prefix);
   }
 
-  private ThreadConfig getThreadConfig() {
-    return new ThreadConfig(ImplFirebaseTrampolines.getThreadFactory(firebaseApp),
-        getPlatform().getThreadInitializer());
-  }
-
-  public ConnectionContext getConnectionContext() {
+  ConnectionContext getConnectionContext() {
     return new ConnectionContext(
         this.logger,
         wrapAuthTokenProvider(this.getAuthTokenProvider()),
         this.getExecutorService(),
         this.isPersistenceEnabled(),
         FirebaseDatabase.getSdkVersion(),
-        this.getUserAgent(),
-        this.getThreadConfig());
+        this.getUserAgent());
   }
 
   PersistenceManager getPersistenceManager(String firebaseId) {
-    // TODO[persistence]: Create this once and store it.
-    if (forcedPersistenceManager != null) {
-      return forcedPersistenceManager;
-    }
     if (this.persistenceEnabled) {
       PersistenceManager cache = platform.createPersistenceManager(this, firebaseId);
       if (cache == null) {
@@ -187,17 +172,12 @@ public class Context {
     }
   }
 
-  public boolean isPersistenceEnabled() {
+  boolean isPersistenceEnabled() {
     return this.persistenceEnabled;
   }
 
   public long getPersistenceCacheSizeBytes() {
     return this.cacheSize;
-  }
-
-  // For testing
-  void forcePersistenceManager(PersistenceManager persistenceManager) {
-    this.forcedPersistenceManager = persistenceManager;
   }
 
   public EventTarget getEventTarget() {
@@ -208,23 +188,15 @@ public class Context {
     return runLoop;
   }
 
-  public String getUserAgent() {
+  String getUserAgent() {
     return userAgent;
-  }
-
-  public String getPlatformVersion() {
-    return getPlatform().getPlatformVersion();
-  }
-
-  public String getSessionPersistenceKey() {
-    return this.persistenceKey;
   }
 
   public AuthTokenProvider getAuthTokenProvider() {
     return this.authTokenProvider;
   }
 
-  public PersistentConnection newPersistentConnection(
+  PersistentConnection newPersistentConnection(
       HostInfo info, PersistentConnection.Delegate delegate) {
     return getPlatform().newPersistentConnection(this, this.getConnectionContext(), info, delegate);
   }
@@ -276,14 +248,13 @@ public class Context {
   }
 
   private String buildUserAgent(String platformAgent) {
-    StringBuilder sb =
-        new StringBuilder()
+    return new StringBuilder()
             .append("Firebase/")
             .append(Constants.WIRE_PROTOCOL_VERSION)
             .append("/")
             .append(FirebaseDatabase.getSdkVersion())
             .append("/")
-            .append(platformAgent);
-    return sb.toString();
+            .append(platformAgent)
+            .toString();
   }
 }
