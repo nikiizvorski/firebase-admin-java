@@ -1,5 +1,6 @@
 package com.google.firebase.database.tyrus;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
@@ -12,6 +13,8 @@ import com.google.firebase.database.core.Repo;
 
 import java.io.IOException;
 import java.net.URI;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -38,8 +41,9 @@ public class TyrusPersistentConnection extends Endpoint
 
   private final ClientManager client;
   private final AtomicLong requestCounter = new AtomicLong(0);
-  private final Map<Long, Messages.OutgoingMessage> outbox = new ConcurrentHashMap<>();
-  private final Map<ListenQuerySpec, Messages.QueryMessage> listens = new ConcurrentHashMap<>();
+  private final Map<Long, OutgoingMessage> outbox = new ConcurrentHashMap<>();
+  private final Map<ListenQuerySpec, OutgoingMessage.Query> listens = new ConcurrentHashMap<>();
+  private final Map<Long, OutgoingMessage.Put> writes = new ConcurrentHashMap<>();
 
   private State state = State.READY;
   private String cachedHost;
@@ -70,7 +74,7 @@ public class TyrusPersistentConnection extends Endpoint
     session.addMessageHandler(this);
   }
 
-  private void sendAsync(Messages.OutgoingMessage message) {
+  private void sendAsync(OutgoingMessage message) {
     String data = message.toJson();
     System.out.println("State: " + state + "; Outgoing: " + data);
     outbox.put(message.getRequestNumber(), message);
@@ -78,59 +82,65 @@ public class TyrusPersistentConnection extends Endpoint
   }
 
   private void handleConnectedState(Message message) {
-    checkState(message instanceof Messages.ControlMessage);
-    Messages.ControlMessage controlMessage = (Messages.ControlMessage) message;
+    checkState(message instanceof Message.Control);
+    Message.Control controlMessage = (Message.Control) message;
     checkState(controlMessage.getType().equals("h"));
-    cachedHost = controlMessage.getData("h", String.class);
+    cachedHost = controlMessage.getDataField("h", String.class);
     delegate.onConnect();
 
     state = State.AUTHENTICATING;
-    sendAsync(new Messages.StatsMessage(requestCounter.getAndIncrement()));
-
+    sendAsync(new OutgoingMessage.Stats(requestCounter.getAndIncrement()));
     String token = AuthUtils.getToken(authProvider);
-    Messages.MessageCallback oncomplete = new Messages.MessageCallback() {
-      @Override
-      public void onComplete(Messages.AckMessage ack) {
-        if (ack.getData("s", String.class).equals("ok")) {
-          System.out.println("Auth successful");
-          state = State.AUTHENTICATED;
-          delegate.onAuthStatus(true);
-          for (Messages.QueryMessage listen : listens.values()) {
-            sendAsync(listen);
-          }
-        } else {
-          delegate.onAuthStatus(false);
-        }
-      }
-    };
-    sendAsync(new Messages.AuthMessage(token, oncomplete, requestCounter.getAndIncrement()));
+    sendAsync(new OutgoingMessage.Auth(token, requestCounter.getAndIncrement()));
   }
 
   private void handleAuthenticatingState(Message message) {
-    checkState(message instanceof Messages.AckMessage);
-    Messages.AckMessage ack = (Messages.AckMessage) message;
-    resolveAck(ack);
-  }
+    checkArgument(message instanceof Message.Ack);
+    OutgoingMessage request = resolve((Message.Ack) message);
+    if (request instanceof OutgoingMessage.Auth) {
+      if (message.getDataField("s", String.class).equals("ok")) {
+        state = State.AUTHENTICATED;
+        // Restore state
+        for (OutgoingMessage.Query listen : listens.values()) {
+          sendAsync(listen);
+        }
 
-  private void handleAuthenticatedState(Message message) {
-    if (message instanceof Messages.AckMessage) {
-      Messages.AckMessage ack = (Messages.AckMessage) message;
-      resolveAck(ack);
-    } else if (message instanceof Messages.IncomingActionMessage) {
-      ((Messages.IncomingActionMessage) message).process(delegate);
+        // Restore puts
+        List<Long> outstanding = new ArrayList<>(writes.keySet());
+        // Make sure puts are restored in order
+        Collections.sort(outstanding);
+        for (Long put : outstanding) {
+          sendAsync(writes.get(put));
+        }
+      }
     }
   }
 
-  private void resolveAck(Messages.AckMessage ack) {
-    Messages.OutgoingMessage request = outbox.remove(ack.getRequestNumber());
-    checkState(request != null);
-    request.process(ack);
+  private void handleAuthenticatedState(Message message) {
+    if (message instanceof Message.Ack) {
+      Message.Ack ack = (Message.Ack) message;
+      OutgoingMessage request = resolve(ack);
+      if (request instanceof OutgoingMessage.Put) {
+        System.out.println("Write complete");
+        writes.remove(request.getRequestNumber());
+      }
+    } else if (message instanceof Message.DataMessage) {
+      Message.DataMessage dataMessage = (Message.DataMessage) message;
+      dataMessage.onComplete(delegate);
+    }
+  }
+
+  private OutgoingMessage resolve(Message.Ack ack) {
+    OutgoingMessage request = outbox.remove(ack.getRequestNumber());
+    checkNotNull(request);
+    request.onComplete(delegate, ack);
+    return request;
   }
 
   @Override
   public void onMessage(String data) {
     System.out.println("wire >> " + data);
-    Message message = Messages.parse(data);
+    Message message = Message.parse(data);
     switch (state) {
       case CONNECTED:
         handleConnectedState(message);
@@ -189,7 +199,7 @@ public class TyrusPersistentConnection extends Endpoint
 
     ListenQuerySpec query = new ListenQuerySpec(path, queryParams);
     checkState(!listens.containsKey(query), "listen() called twice for same QuerySpec.");
-    Messages.QueryMessage queryMessage = new Messages.QueryMessage(callback, query,
+    OutgoingMessage.Query queryMessage = new OutgoingMessage.Query(callback, query,
         currentHashFn, tag, requestCounter.getAndIncrement());
     listens.put(query, queryMessage);
     if (state == State.AUTHENTICATED) {
@@ -209,7 +219,12 @@ public class TyrusPersistentConnection extends Endpoint
 
   @Override
   public void put(List<String> path, Object data, RequestResultCallback onComplete) {
-
+    OutgoingMessage.Put put = new OutgoingMessage.Put(
+        path, data, onComplete, requestCounter.getAndIncrement());
+    writes.put(put.getRequestNumber(), put);
+    if (state == State.AUTHENTICATED) {
+      sendAsync(put);
+    }
   }
 
   @Override

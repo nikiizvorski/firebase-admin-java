@@ -3,6 +3,7 @@ package com.google.firebase;
 import com.google.auth.oauth2.GoogleCredentials;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.Logger;
 import com.google.firebase.database.ValueEventListener;
@@ -88,7 +89,8 @@ public class Main {
     FirebaseDatabase database = FirebaseDatabase.getInstance();
     database.setLogLevel(Logger.Level.DEBUG);
 
-    database.getReference().child("foo").addValueEventListener(new ValueEventListener() {
+    DatabaseReference foo = database.getReference().child("foo");
+    foo.addValueEventListener(new ValueEventListener() {
       @Override
       public void onDataChange(DataSnapshot snapshot) {
         System.out.println(snapshot.getValue());
@@ -99,6 +101,7 @@ public class Main {
 
       }
     });
+    foo.child("bar").setValueAsync(System.currentTimeMillis()).get();
     Thread.sleep(500000);
     app.delete();
   }
