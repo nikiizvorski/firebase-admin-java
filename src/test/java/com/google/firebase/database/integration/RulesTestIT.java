@@ -25,6 +25,7 @@ import static org.junit.Assert.fail;
 import com.google.auth.oauth2.GoogleCredentials;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
+import com.google.firebase.ImplFirebaseTrampolines;
 import com.google.firebase.TestOnlyImplFirebaseTrampolines;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
@@ -417,7 +418,8 @@ public class RulesTestIT {
     DatabaseConfig config = TestHelpers.getDatabaseConfig(masterApp);
     AuthTokenProvider originalProvider = config.getAuthTokenProvider();
     try {
-      TestTokenProvider provider = new TestTokenProvider(TestHelpers.getExecutorService(config));
+      TestTokenProvider provider = new TestTokenProvider(
+          ImplFirebaseTrampolines.getScheduledExecutor(masterApp));
       config.setAuthTokenProvider(provider);
 
       DatabaseReference root = FirebaseDatabase.getInstance(masterApp).getReference();

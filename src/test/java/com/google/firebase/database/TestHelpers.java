@@ -29,7 +29,6 @@ import com.google.firebase.database.core.view.QuerySpec;
 import com.google.firebase.database.future.WriteFuture;
 import com.google.firebase.database.snapshot.ChildKey;
 import com.google.firebase.database.util.JsonMapper;
-import com.google.firebase.database.utilities.DefaultRunLoop;
 import com.google.firebase.internal.NonNull;
 import com.google.firebase.testing.TestUtils;
 import java.io.IOException;
@@ -42,7 +41,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -62,7 +60,7 @@ public class TestHelpers {
     return config;
   }
 
-  public static void interruptConfig(final DatabaseConfig config) throws InterruptedException {
+  static void interruptConfig(final DatabaseConfig config) throws InterruptedException {
     RepoManager.interrupt(config);
     long now = System.currentTimeMillis();
     synchronized (config) {
@@ -77,11 +75,6 @@ public class TestHelpers {
 
   public static DatabaseConfig getDatabaseConfig(FirebaseApp app) {
     return FirebaseDatabase.getInstance(app).getConfig();
-  }
-
-  public static ScheduledExecutorService getExecutorService(DatabaseConfig config) {
-    DefaultRunLoop runLoop = (DefaultRunLoop) config.getRunLoop();
-    return runLoop.getExecutorService();
   }
 
   public static void setLogger(
@@ -260,8 +253,6 @@ public class TestHelpers {
   public static void wrapForErrorHandling(@NonNull FirebaseApp app) {
     DatabaseConfig context = getDatabaseConfig(app);
     CoreTestHelpers.freezeContext(context);
-    DefaultRunLoop runLoop = (DefaultRunLoop) context.getRunLoop();
-    runLoop.setExceptionHandler(new TestExceptionHandler());
     CoreTestHelpers.setEventTargetExceptionHandler(context, new TestExceptionHandler());
   }
 
@@ -276,22 +267,15 @@ public class TestHelpers {
    */
   public static void assertAndUnwrapErrorHandlers(FirebaseApp app) {
     DatabaseConfig context = getDatabaseConfig(app);
-    DefaultRunLoop runLoop = (DefaultRunLoop) context.getRunLoop();
     try {
-      TestExceptionHandler handler = (TestExceptionHandler) runLoop.getExceptionHandler();
+      TestExceptionHandler handler = (TestExceptionHandler) CoreTestHelpers
+          .getEventTargetExceptionHandler(context);
       Throwable error = handler.throwable.get();
-      if (error != null) {
-        throw new RuntimeException(error);
-      }
-
-      handler = (TestExceptionHandler) CoreTestHelpers.getEventTargetExceptionHandler(context);
-      error = handler.throwable.get();
       if (error != null) {
         throw new RuntimeException(error);
       }
     } finally {
       CoreTestHelpers.setEventTargetExceptionHandler(context, null);
-      runLoop.setExceptionHandler(null);
     }
   }
 

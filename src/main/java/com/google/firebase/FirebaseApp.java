@@ -385,6 +385,10 @@ public class FirebaseApp {
     }
   }
 
+  ScheduledExecutorService getScheduledExecutor() {
+    return ensureScheduledExecutorService();
+  }
+
   void startTokenRefresher() {
     synchronized (lock) {
       checkNotDeleted();

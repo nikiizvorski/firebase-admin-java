@@ -50,10 +50,11 @@ class WebsocketConnection {
   private final ConnectionContext connectionContext;
   private final ScheduledExecutorService executorService;
   private final LogWrapper logger;
-  private WSClient conn;
+  private final Delegate delegate;
+  private final WSClient conn;
+
   private boolean everConnected = false;
   private boolean isClosed = false;
-  private Delegate delegate;
   private ScheduledFuture<?> keepAlive;
   private ScheduledFuture<?> connectTimeout;
 
@@ -147,10 +148,8 @@ class WebsocketConnection {
     return new Runnable() {
       @Override
       public void run() {
-        if (conn != null) {
-          conn.send("0");
-          resetKeepAlive();
-        }
+        conn.send("0");
+        resetKeepAlive();
       }
     };
   }
@@ -162,7 +161,6 @@ class WebsocketConnection {
       }
       shutdown();
     }
-    conn = null;
     if (keepAlive != null) {
       keepAlive.cancel(false);
     }
@@ -216,6 +214,7 @@ class WebsocketConnection {
           .setCorePoolSize(0)
           .setMaxPoolSize(3)
           .setDaemon(true)
+          .setThreadFactory(connectionContext.getThreadFactory())
           .setPoolName("hkj-websocket");
       client.getProperties().put(ClientProperties.WORKER_THREAD_POOL_CONFIG, config);
       this.client = client;
@@ -301,7 +300,6 @@ class WebsocketConnection {
 
     @Override
     public void send(String msg) {
-      resetKeepAlive();
       session.getAsyncRemote().sendText(msg);
     }
   }

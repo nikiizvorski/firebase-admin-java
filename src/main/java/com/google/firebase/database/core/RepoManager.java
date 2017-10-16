@@ -96,8 +96,7 @@ public class RepoManager {
     String repoHash = "https://" + info.host + "/" + info.namespace;
     synchronized (repos) {
       if (!repos.containsKey(ctx)) {
-        Map<String, Repo> innerMap = new HashMap<>();
-        repos.put(ctx, innerMap);
+        repos.put(ctx, new HashMap<String, Repo>());
       }
       Map<String, Repo> innerMap = repos.get(ctx);
       if (!innerMap.containsKey(repoHash)) {
@@ -111,45 +110,27 @@ public class RepoManager {
   }
 
   private void interruptInternal(final Context ctx) {
-    RunLoop runLoop = ctx.getRunLoop();
-    if (runLoop != null) {
-      runLoop.scheduleNow(
-          new Runnable() {
-            @Override
-            public void run() {
-              synchronized (repos) {
-                boolean allEmpty = true;
-                if (repos.containsKey(ctx)) {
-                  for (Repo repo : repos.get(ctx).values()) {
-                    repo.interrupt();
-                    allEmpty = allEmpty && !repo.hasListeners();
-                  }
-                  if (allEmpty) {
-                    ctx.stop();
-                  }
-                }
-              }
-            }
-          });
+    synchronized (repos) {
+      boolean allEmpty = true;
+      if (repos.containsKey(ctx)) {
+        for (Repo repo : repos.get(ctx).values()) {
+          repo.interrupt();
+          allEmpty = allEmpty && !repo.hasListeners();
+        }
+        if (allEmpty) {
+          ctx.stop();
+        }
+      }
     }
   }
 
   private void resumeInternal(final Context ctx) {
-    RunLoop runLoop = ctx.getRunLoop();
-    if (runLoop != null) {
-      runLoop.scheduleNow(
-          new Runnable() {
-            @Override
-            public void run() {
-              synchronized (repos) {
-                if (repos.containsKey(ctx)) {
-                  for (Repo repo : repos.get(ctx).values()) {
-                    repo.resume();
-                  }
-                }
-              }
-            }
-          });
+    synchronized (repos) {
+      if (repos.containsKey(ctx)) {
+        for (Repo repo : repos.get(ctx).values()) {
+          repo.resume();
+        }
+      }
     }
   }
 }

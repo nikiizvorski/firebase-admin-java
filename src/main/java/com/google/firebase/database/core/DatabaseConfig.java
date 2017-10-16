@@ -106,10 +106,6 @@ public class DatabaseConfig extends Context {
     loggedComponents = debugComponents;
   }
 
-  public void setRunLoop(RunLoop runLoop) {
-    this.runLoop = runLoop;
-  }
-
   public void setAuthTokenProvider(AuthTokenProvider provider) {
     this.authTokenProvider = provider;
   }

@@ -17,6 +17,7 @@
 package com.google.firebase.database.core;
 
 import com.google.firebase.FirebaseApp;
+import com.google.firebase.ImplFirebaseTrampolines;
 import com.google.firebase.database.DatabaseException;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.connection.ConnectionAuthTokenProvider;
@@ -27,10 +28,10 @@ import com.google.firebase.database.core.persistence.NoopPersistenceManager;
 import com.google.firebase.database.core.persistence.PersistenceManager;
 import com.google.firebase.database.logging.LogWrapper;
 import com.google.firebase.database.logging.Logger;
-import com.google.firebase.database.utilities.DefaultRunLoop;
 
 import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadFactory;
 
 public class Context {
 
@@ -40,7 +41,6 @@ public class Context {
 
   EventTarget eventTarget;
   AuthTokenProvider authTokenProvider;
-  RunLoop runLoop;
   String persistenceKey;
   List<String> loggedComponents;
   Logger.Level logLevel = Logger.Level.INFO;
@@ -111,22 +111,18 @@ public class Context {
     // Cache platform
     getPlatform();
     ensureUserAgent();
-    //ensureStorage();
     ensureEventTarget();
-    ensureRunLoop();
     ensureSessionIdentifier();
     ensureAuthTokenProvider();
   }
 
   private void restartServices() {
     eventTarget.restart();
-    runLoop.restart();
   }
 
   void stop() {
     stopped = true;
     eventTarget.shutdown();
-    runLoop.shutdown();
   }
 
   void assertUnfrozen() {
@@ -153,6 +149,7 @@ public class Context {
         this.logger,
         wrapAuthTokenProvider(this.getAuthTokenProvider()),
         this.getExecutorService(),
+        this.getThreadFactory(),
         this.isPersistenceEnabled(),
         FirebaseDatabase.getSdkVersion(),
         this.getUserAgent());
@@ -184,10 +181,6 @@ public class Context {
     return eventTarget;
   }
 
-  public RunLoop getRunLoop() {
-    return runLoop;
-  }
-
   String getUserAgent() {
     return userAgent;
   }
@@ -202,24 +195,16 @@ public class Context {
   }
 
   private ScheduledExecutorService getExecutorService() {
-    RunLoop loop = this.getRunLoop();
-    if (!(loop instanceof DefaultRunLoop)) {
-      // TODO: We really need to remove this option from the public DatabaseConfig
-      // object
-      throw new RuntimeException("Custom run loops are not supported!");
-    }
-    return ((DefaultRunLoop) loop).getExecutorService();
+    return ImplFirebaseTrampolines.getScheduledExecutor(firebaseApp);
+  }
+
+  private ThreadFactory getThreadFactory() {
+    return ImplFirebaseTrampolines.getThreadFactory(firebaseApp);
   }
 
   private void ensureLogger() {
     if (logger == null) {
       logger = getPlatform().newLogger(this, logLevel, loggedComponents);
-    }
-  }
-
-  private void ensureRunLoop() {
-    if (runLoop == null) {
-      runLoop = platform.newRunLoop(this);
     }
   }
 
