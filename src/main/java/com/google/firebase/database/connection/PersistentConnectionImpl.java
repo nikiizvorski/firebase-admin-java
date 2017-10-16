@@ -284,6 +284,10 @@ public class PersistentConnectionImpl implements Connection.Delegate, Persistent
     this.realtime = null;
     this.hasOnDisconnects = false;
     requestCBHash.clear();
+    if (inactivityTimer != null) {
+      inactivityTimer.cancel(false);
+      inactivityTimer = null;
+    }
     cancelSentTransactions();
     if (shouldReconnect()) {
       long timeSinceLastConnectSucceeded =
@@ -417,7 +421,7 @@ public class PersistentConnectionImpl implements Connection.Delegate, Persistent
     return interruptReasons.contains(reason);
   }
 
-  boolean shouldReconnect() {
+  private boolean shouldReconnect() {
     return interruptReasons.size() == 0;
   }
 
@@ -519,7 +523,7 @@ public class PersistentConnectionImpl implements Connection.Delegate, Persistent
     }
   }
 
-  public void openNetworkConnection(String token) {
+  private void openNetworkConnection(String token) {
     hardAssert(
         this.connectionState == ConnectionState.GettingToken,
         "Trying to open network connection while in the wrong state: %s",

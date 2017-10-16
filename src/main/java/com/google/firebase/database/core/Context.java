@@ -17,6 +17,7 @@
 package com.google.firebase.database.core;
 
 import com.google.firebase.FirebaseApp;
+import com.google.firebase.ImplFirebaseTrampolines;
 import com.google.firebase.database.DatabaseException;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.connection.ConnectionAuthTokenProvider;
@@ -125,8 +126,12 @@ public class Context {
 
   void stop() {
     stopped = true;
-    eventTarget.shutdown();
-    runLoop.shutdown();
+    if (eventTarget != null) {
+      eventTarget.shutdown();
+    }
+    if (runLoop != null) {
+      runLoop.shutdown();
+    }
   }
 
   void assertUnfrozen() {
@@ -153,6 +158,7 @@ public class Context {
         this.logger,
         wrapAuthTokenProvider(this.getAuthTokenProvider()),
         this.getExecutorService(),
+        ImplFirebaseTrampolines.getThreadFactory(firebaseApp),
         this.isPersistenceEnabled(),
         FirebaseDatabase.getSdkVersion(),
         this.getUserAgent());

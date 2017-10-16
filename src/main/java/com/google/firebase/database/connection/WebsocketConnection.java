@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import javax.websocket.ClientEndpointConfig;
@@ -40,6 +41,7 @@ import javax.websocket.Session;
 import org.glassfish.tyrus.client.ClientManager;
 import org.glassfish.tyrus.client.ClientProperties;
 import org.glassfish.tyrus.client.ThreadPoolConfig;
+import org.glassfish.tyrus.container.jdk.client.JdkClientContainer;
 
 class WebsocketConnection {
 
@@ -50,10 +52,11 @@ class WebsocketConnection {
   private final ConnectionContext connectionContext;
   private final ScheduledExecutorService executorService;
   private final LogWrapper logger;
-  private WSClient conn;
+  private final WSClient conn;
+  private final Delegate delegate;
+
   private boolean everConnected = false;
   private boolean isClosed = false;
-  private Delegate delegate;
   private ScheduledFuture<?> keepAlive;
   private ScheduledFuture<?> connectTimeout;
 
@@ -147,10 +150,7 @@ class WebsocketConnection {
     return new Runnable() {
       @Override
       public void run() {
-        if (conn != null) {
-          conn.send("0");
-          resetKeepAlive();
-        }
+        conn.send("0");
       }
     };
   }
@@ -162,7 +162,6 @@ class WebsocketConnection {
       }
       shutdown();
     }
-    conn = null;
     if (keepAlive != null) {
       keepAlive.cancel(false);
     }
@@ -211,12 +210,28 @@ class WebsocketConnection {
     WSEndpoint(URI uri, Map<String, String> headers) {
       this.uri = uri;
       this.extraHeaders = headers;
-      ClientManager client = ClientManager.createClient();
+      ClientManager client = ClientManager.createClient(JdkClientContainer.class.getName());
+      ThreadFactory threadFactory = new ThreadFactory() {
+        private final AtomicLong counter = new AtomicLong(0);
+        @Override
+        public Thread newThread(Runnable r) {
+          Thread thread = connectionContext.getThreadFactory().newThread(r);
+          try {
+            thread.setDaemon(true);
+            thread.setName("firebase-websocket-worker-" + counter.getAndIncrement());
+          } catch (Exception ignored) {
+            // ignore
+          }
+          return thread;
+        }
+      };
+
       ThreadPoolConfig config = ThreadPoolConfig.defaultConfig()
+          .setThreadFactory(threadFactory)
           .setCorePoolSize(0)
           .setMaxPoolSize(3)
           .setDaemon(true)
-          .setPoolName("hkj-websocket");
+          .setPoolName("firebase-websocket-pool");
       client.getProperties().put(ClientProperties.WORKER_THREAD_POOL_CONFIG, config);
       this.client = client;
     }
@@ -234,37 +249,52 @@ class WebsocketConnection {
     }
 
     @Override
-    public void onMessage(String message) {
-      try {
-        resetKeepAlive();
-        Map<String, Object> decoded = JsonMapper.parseJson(message);
-        if (logger.logsDebug()) {
-          logger.debug("handleIncomingFrame complete frame: " + decoded);
+    public void onMessage(final String message) {
+      executorService.execute(new Runnable() {
+        @Override
+        public void run() {
+          try {
+            resetKeepAlive();
+            Map<String, Object> decoded = JsonMapper.parseJson(message);
+            if (logger.logsDebug()) {
+              logger.debug("handleIncomingFrame complete frame: " + decoded);
+            }
+            delegate.onMessage(decoded);
+          } catch (IOException e) {
+            logger.error("Error parsing frame: " + message, e);
+            close();
+            shutdown();
+          } catch (ClassCastException e) {
+            logger.error("Error parsing frame (cast error): " + message, e);
+            close();
+            shutdown();
+          }
         }
-        delegate.onMessage(decoded);
-      } catch (IOException e) {
-        logger.error("Error parsing frame: " + message, e);
-        close();
-        shutdown();
-      } catch (ClassCastException e) {
-        logger.error("Error parsing frame (cast error): " + message, e);
-        close();
-        shutdown();
-      }
+      });
     }
 
     @Override
     public void onClose(Session session, CloseReason closeReason) {
-      if (logger.logsDebug()) {
-        logger.debug("closed");
-      }
-      onClosed();
+      executorService.execute(new Runnable() {
+        @Override
+        public void run() {
+          if (logger.logsDebug()) {
+            logger.debug("closed");
+          }
+          onClosed();
+        }
+      });
     }
 
     @Override
-    public void onError(Session session, Throwable e) {
-      logger.debug("WebSocket error.", e);
-      onClosed();
+    public void onError(Session session, final Throwable e) {
+      executorService.execute(new Runnable() {
+        @Override
+        public void run() {
+          logger.debug("WebSocket error.", e);
+          onClosed();
+        }
+      });
     }
 
     @Override

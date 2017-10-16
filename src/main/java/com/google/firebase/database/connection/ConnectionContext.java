@@ -19,10 +19,12 @@ package com.google.firebase.database.connection;
 import com.google.firebase.database.logging.Logger;
 
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadFactory;
 
 public class ConnectionContext {
 
   private final ScheduledExecutorService executorService;
+  private final ThreadFactory threadFactory;
   private final ConnectionAuthTokenProvider authTokenProvider;
   private final Logger logger;
   private final boolean persistenceEnabled;
@@ -33,12 +35,14 @@ public class ConnectionContext {
       Logger logger,
       ConnectionAuthTokenProvider authTokenProvider,
       ScheduledExecutorService executorService,
+      ThreadFactory threadFactory,
       boolean persistenceEnabled,
       String clientSdkVersion,
       String userAgent) {
     this.logger = logger;
     this.authTokenProvider = authTokenProvider;
     this.executorService = executorService;
+    this.threadFactory = threadFactory;
     this.persistenceEnabled = persistenceEnabled;
     this.clientSdkVersion = clientSdkVersion;
     this.userAgent = userAgent;
@@ -54,6 +58,10 @@ public class ConnectionContext {
 
   public ScheduledExecutorService getExecutorService() {
     return this.executorService;
+  }
+
+  public ThreadFactory getThreadFactory() {
+    return threadFactory;
   }
 
   public boolean isPersistenceEnabled() {

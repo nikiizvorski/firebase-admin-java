@@ -359,11 +359,7 @@ public class FirebaseDatabase {
         return;
       }
 
-      if (repo != null) {
-        RepoManager.interrupt(repo);
-        repo = null;
-      }
-      RepoManager.interrupt(getConfig());
+      RepoManager.destroy(getConfig());
       destroyed.compareAndSet(false, true);
     }
   }
