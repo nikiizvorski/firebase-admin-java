@@ -25,7 +25,9 @@ import com.google.firebase.database.connection.PersistentConnection;
 import com.google.firebase.database.connection.PersistentConnectionImpl;
 import com.google.firebase.database.core.persistence.PersistenceManager;
 import com.google.firebase.database.logging.DefaultLogger;
+import com.google.firebase.database.logging.LogWrapper;
 import com.google.firebase.database.logging.Logger;
+import com.google.firebase.database.utilities.DefaultRunLoop;
 import com.google.firebase.internal.GaeThreadFactory;
 import com.google.firebase.internal.RevivingScheduledExecutor;
 
@@ -65,6 +67,17 @@ class GaePlatform implements Platform {
     RevivingScheduledExecutor eventExecutor =
         new RevivingScheduledExecutor(getGaeThreadFactory(), "FirebaseDatabaseEventTarget", true);
     return new ThreadPoolEventTarget(eventExecutor);
+  }
+
+  @Override
+  public RunLoop newRunLoop(final Context context) {
+    final LogWrapper logger = context.getLogger(RunLoop.class);
+    return new DefaultRunLoop(getGaeThreadFactory(), /* periodicRestart= */ true, context) {
+      @Override
+      public void handleException(Throwable e) {
+        logger.error(DefaultRunLoop.messageForException(e), e);
+      }
+    };
   }
 
   @Override

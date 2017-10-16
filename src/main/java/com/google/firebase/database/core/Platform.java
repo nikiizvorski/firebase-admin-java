@@ -33,6 +33,8 @@ public interface Platform {
 
   EventTarget newEventTarget(Context ctx);
 
+  RunLoop newRunLoop(Context ctx);
+
   AuthTokenProvider newAuthTokenProvider(ScheduledExecutorService executorService);
 
   PersistentConnection newPersistentConnection(

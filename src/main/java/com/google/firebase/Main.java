@@ -1,7 +1,6 @@
 package com.google.firebase;
 
 import com.google.auth.oauth2.GoogleCredentials;
-import com.google.firebase.database.ChildEventListener;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
@@ -10,6 +9,7 @@ import com.google.firebase.database.Logger;
 import com.google.firebase.database.ValueEventListener;
 
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.net.URI;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.websocket.ClientEndpointConfig;
@@ -54,6 +54,27 @@ public class Main {
 
     @Override
     public void onMessage(String s) {
+      System.out.println(s);
+      int index = counter.incrementAndGet();
+      String msg = null;
+      if (index == 1) {
+        msg = "{\"t\":\"d\",\"d\":{\"a\":\"s\",\"r\":0,\"b\":{\"c\":{\"sdk" +
+            ".admin_java.5-4-1-SNAPSHOT\":1}}}}";
+      } else if (index == 2) {
+        msg = "{\"t\":\"d\",\"d\":{\"a\":\"gauth\",\"r\":1," +
+            "\"b\":{\"cred\":\"ya29.El_kBHo7Pg6ZFy1TtCAfju5S9yayPotN857JFVMTvXRmDC7TPtjvyvM6qwQ" +
+            "ScnnogGb90Bpe7vVpF4rMyMFFdDDfph-DVZpWG27PgnfI7PhMgAZeVl6IJtcUUiAVAor_kQ\"}}}";
+      } else if (index == 3) {
+        msg = "{\"t\":\"d\",\"d\":{\"a\":\"q\",\"r\":2,\"b\":{\"p\":\"foo\",\"h\":\"\"}}}";
+      }
+
+      if (msg != null) {
+        try {
+          session.getBasicRemote().sendText(msg);
+        } catch (IOException e) {
+          e.printStackTrace();
+        }
+      }
     }
   }
 
@@ -64,7 +85,7 @@ public class Main {
         .setCredentials(credentials)
         .setDatabaseUrl("https://admin-java-integration.firebaseio.com")
         .build();
-    FirebaseApp.initializeApp(options);
+    FirebaseApp app = FirebaseApp.initializeApp(options);
     FirebaseDatabase database = FirebaseDatabase.getInstance();
     database.setLogLevel(Logger.Level.DEBUG);
 
@@ -81,35 +102,8 @@ public class Main {
       }
     });
     foo.child("bar").setValueAsync(System.currentTimeMillis()).get();
-
-    database.getReference().child("parent").addChildEventListener(new ChildEventListener() {
-      @Override
-      public void onChildAdded(DataSnapshot snapshot, String previousChildName) {
-        System.out.println("[EVENT] ADD " + snapshot.getValue());
-      }
-
-      @Override
-      public void onChildChanged(DataSnapshot snapshot, String previousChildName) {
-        System.out.println("[EVENT] CHANGE " + snapshot.getValue());
-      }
-
-      @Override
-      public void onChildRemoved(DataSnapshot snapshot) {
-        System.out.println("[EVENT] DELETE " + snapshot.getValue());
-      }
-
-      @Override
-      public void onChildMoved(DataSnapshot snapshot, String previousChildName) {
-        System.out.println("[EVENT] MOVE " + snapshot.getValue());
-      }
-
-      @Override
-      public void onCancelled(DatabaseError error) {
-        System.out.println("ERROR: " + error.getMessage());
-      }
-    });
-    System.in.read();
-    FirebaseApp.getInstance().delete();
+    Thread.sleep(500000);
+    app.delete();
   }
 
 }

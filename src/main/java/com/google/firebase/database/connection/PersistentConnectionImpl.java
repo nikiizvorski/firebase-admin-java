@@ -519,7 +519,7 @@ public class PersistentConnectionImpl implements Connection.Delegate, Persistent
     }
   }
 
-  private void openNetworkConnection(String token) {
+  public void openNetworkConnection(String token) {
     hardAssert(
         this.connectionState == ConnectionState.GettingToken,
         "Trying to open network connection while in the wrong state: %s",

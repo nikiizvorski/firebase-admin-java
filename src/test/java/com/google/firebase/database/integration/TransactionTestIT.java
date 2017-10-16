@@ -56,7 +56,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -1918,12 +1920,19 @@ public class TransactionTestIT {
       public void getToken(boolean forceRefresh, final GetTokenCompletionListener listener) {
         // Return "bad-token" once to trigger a disconnect, and then a null
         // token.
-        if (count == 0) {
-          count++;
-          listener.onSuccess("bad-token");
-        } else {
-          listener.onSuccess(null);
-        }
+        @SuppressWarnings("unused")
+        Future<?> possiblyIgnoredError = TestHelpers.getExecutorService(cfg)
+            .schedule(new Runnable() {
+              @Override
+              public void run() {
+                if (count == 0) {
+                  count++;
+                  listener.onSuccess("bad-token");
+                } else {
+                  listener.onSuccess(null);
+                }
+              }
+            }, 10, TimeUnit.MILLISECONDS);
       }
 
       @Override

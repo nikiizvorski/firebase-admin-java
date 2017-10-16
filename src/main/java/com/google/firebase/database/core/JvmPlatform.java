@@ -25,7 +25,9 @@ import com.google.firebase.database.connection.PersistentConnection;
 import com.google.firebase.database.connection.PersistentConnectionImpl;
 import com.google.firebase.database.core.persistence.PersistenceManager;
 import com.google.firebase.database.logging.DefaultLogger;
+import com.google.firebase.database.logging.LogWrapper;
 import com.google.firebase.database.logging.Logger;
+import com.google.firebase.database.utilities.DefaultRunLoop;
 
 import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
@@ -50,6 +52,18 @@ class JvmPlatform implements Platform {
   public EventTarget newEventTarget(Context ctx) {
     ThreadFactory threadFactory = ImplFirebaseTrampolines.getThreadFactory(firebaseApp);
     return new ThreadPoolEventTarget(threadFactory, ThreadInitializer.defaultInstance);
+  }
+
+  @Override
+  public RunLoop newRunLoop(final Context context) {
+    final LogWrapper logger = context.getLogger(RunLoop.class);
+    ThreadFactory threadFactory = ImplFirebaseTrampolines.getThreadFactory(firebaseApp);
+    return new DefaultRunLoop(threadFactory) {
+      @Override
+      public void handleException(Throwable e) {
+        logger.error(DefaultRunLoop.messageForException(e), e);
+      }
+    };
   }
 
   @Override

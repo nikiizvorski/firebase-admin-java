@@ -278,8 +278,7 @@ public class Repo implements PersistentConnection.Delegate {
   public void scheduleNow(Runnable r) {
     InternalHelpers.checkNotDestroyed(this);
     ctx.requireStarted();
-    //ctx.getRunLoop().scheduleNow(r);
-    r.run();
+    ctx.getRunLoop().scheduleNow(r);
   }
 
   public void postEvent(Runnable r) {
